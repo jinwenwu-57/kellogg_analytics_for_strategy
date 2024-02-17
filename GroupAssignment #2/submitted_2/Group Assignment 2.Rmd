@@ -1,0 +1,169 @@
+---
+title: "Group Assignment 2"
+author: "Wahib Charamand, Valentin de la Pena, Jinwen Wu, Abe Rubin"
+subtitle: "Analytics for Strategy"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r, message = FALSE, warning = FALSE}
+# Packages
+library(dplyr)
+library(haven)
+library(broom)
+library(lfe)
+library(sandwich)
+library(lmtest)
+```
+
+
+```{r}
+# Load Dataset
+data <- read.csv("united-1.csv")
+```
+
+```{r}
+# Summarize Data
+summary(data)
+```
+
+```{r}
+# Recode Date of Departure Variable
+data$departuredate <- as.Date(data$departuredate, format="%d-%b-%y")
+
+# Filter Data to Before Memorial Day Weekend (Before May 25, 2007)
+filtered_data <- subset(data, departuredate <= as.Date("2007-05-25"))
+
+# Summarize Filtered Data
+summary(filtered_data)
+```
+
+```{r}
+# Create Relevant Dummy Variables for Filtered Data
+  # Assigned Seat
+filtered_data$assignedseat <- as.integer(filtered_data$assignedseat == "Y")
+  # Booking Country (US or Not)
+filtered_data$bookingcountry <- as.integer(filtered_data$bookingcountry == "US")
+
+# Create Relevant Dummy Variables for Unfiltered Data
+  # Assigned Seat
+data$assignedseat <- as.integer(data$assignedseat == "Y")
+  # Booking Country (US or Not)
+data$bookingcountry <- as.integer(data$bookingcountry == "US")
+```
+
+```{r}
+# Create Logit Model
+model <- glm(noshow ~ 
+               numberinparty +  # Size of Party
+               daystodep + # Days Between Booking/Modification and Departure
+               eticketed + # Whether Booking Was an E-Ticket
+               assignedseat + # Wheter a Seat Was Assigned
+               bookingcountry + # Whether Booking Was Made in US
+               downline + # If Booking Had Downline Connection
+               upline,  # If Booking Had Upline Connection
+             data = filtered_data, 
+             family = binomial(link = "logit"))
+
+# Summarize Logit Model
+coeftest(model, vcovCL, type='HC1')  
+```
+Question 1: 
+
+(a) The intercept represents the log odds of the dependent variable being 1 (a no-show) when all the independent variables in the model are held at zero. Given the intercept value of -1.17790157, the odds of a no-show are e^(-1.17790157), approximately 0.3080. From the formula [Probability = Odds/(1+Odds)], the probability of a no-show is approximately 23.54%. So, under the hypothetical baseline conditions set by the model (non-electronic ticket, no assigned seat, booking not made in the US, no downline or upline connections, no members of the party, and booking made on the day of departure), the implied probability of a passenger being a no-show is about 23.54%. This is, of course, an unrealistic situation, as there would never be 0 members of a party.
+
+Question 2: 
+
+(a) The effect of adding an upline connection on no-show rates is statistically significant, with a p-value 6.370e-15 and a positive coefficient of about 0.90617180. This indicates that there is a significant association between having an upline connection and the likelihood of being a no-show. However, the effect of adding a downline connection is not statistically significant, with a p-value of 0.3024. This means that, based on the available data, we cannot confidently assert that having a downline connection significantly affects the likelihood of being a no-show.
+
+(b) The coefficient for an upline connection is 0.90617180, which means that for each additional upline connection, the odds of being a no-show are multiplied by e^(0.90617180) = 2.47483023067.
+
+(c) For a baseline probability, consider an individual who is traveling alone, books a flight 7 days before departure from within the U.S., and chooses an e-ticket with an assigned seat and no connections. This archetype is prevalent within the business and finance industry, representing a considerable segment of air travel demand. By adopting this model as our baseline, we afford ourselves a robust platform from which to explore and quantify the impacts of varying travel parameters, such as the addition of connections. 
+
+
+```{r}
+# Create Hypothetical Traveler Without Upline
+typical_business_traveler <- list(
+  numberinparty = 1,
+  daystodep = 7,
+  bookingcountry = 1,
+  eticketed = 1,
+  assignedseat = 1,
+  upline = 0,
+  downline = 0
+)
+
+# Predict Probability of No-Show for Hypothetical Traveler Without Upline
+predicted_business_traveler <- predict(model, 
+                                           newdata = typical_business_traveler, 
+                                           type = "response")
+
+# Create Hypothetical Traveler With Upline
+typical_business_traveler_with_upline <- list(
+  numberinparty = 1,
+  daystodep = 7,
+  bookingcountry = 1,
+  eticketed = 1,
+  assignedseat = 1,
+  upline = 1,
+  downline = 0
+)
+
+# Predict Probability of No-Show for Hypothetical Traveler With Upline
+predicted_business_traveler_with_upline <- predict(model, 
+                                           newdata = typical_business_traveler_with_upline, 
+                                           type = "response")
+
+# Print Probabilities
+print(predicted_business_traveler)
+print(predicted_business_traveler_with_upline)
+```
+
+Based on our model output, for a typical business traveler without an upline connection, the predicted probability of being a no-show is approximately 5.30%. In contrast, for an identical traveler with an upline connection, the predicted probability increases to approximately 12.16%.
+
+This comparison demonstrates that, according to the model, the presence of an upline connection nearly doubles the probability of a business traveler being a no-show. This significant increase suggests that logistical factors associated with connections, particularly upline connections, have a substantial impact on the likelihood of no-shows among business travelers.
+
+```{r}
+# Filter Data to Memorial Day Weekend
+memorial_weekend_data <- subset(data, departuredate >= as.Date("2007-05-26") & departuredate <= as.Date("2007-05-28"))
+
+# Calculate No Shows Probability
+probability_noshows_memorial_day <- predict(model, memorial_weekend_data, type = "response")
+memorial_weekend_data$predicted_noshows_prob <- probability_noshows_memorial_day
+
+# Calculate Predicted No Shows for Party
+memorial_weekend_data$predicted_noshows_memorial_day <- memorial_weekend_data$numberinparty*memorial_weekend_data$predicted_noshows_prob
+
+# Calculate Actual No Shows for a Party (Total)
+memorial_weekend_data$actual_noshows <- memorial_weekend_data$numberinparty*memorial_weekend_data$noshow
+
+# Examine Predicted No-Shows vs. Realized
+cat("Actual No-Shows", 
+    sum(memorial_weekend_data$actual_noshows), "\n")
+cat("Predicted No-Shows", 
+    sum(memorial_weekend_data$predicted_noshows_memorial_day), "\n")
+
+```
+
+Question 3:
+
+(a) Based on our model, we expect 64.5884 absences during the memorial_weekend. There are actually 45 actual absences as recorded in the data. Therefore, wee overestimated the number of absences over Memorial Day Weekend. This would not be good for United, as, overestimating the number of no-shows could result in more passengers showing up than are seats available on flights.
+
+(b)
+```{r}
+# Histogram for parties that did show up
+hist(memorial_weekend_data$predicted_noshows_prob[memorial_weekend_data$noshow == 0], 
+     breaks = 30, col = 'blue', 
+     main = 'Predicted No-Show Probabilities for Parties That Showed Up', 
+     xlab = 'Predicted No-Show Probability', xlim = c(0, 1))
+
+# Histogram for parties that did not show up
+hist(memorial_weekend_data$predicted_noshows_prob[memorial_weekend_data$noshow == 1], 
+     breaks = 30, col = 'red', 
+     main = 'Predicted No-Show Probabilities for Parties That Did Not Show Up', 
+     xlab = 'Predicted No-Show Probability', xlim = c(0, 1))
+
+```
+
+(c) From our answers in parts (a) and (b), we can see that our predictions are considerably flawed. In part (a), we found that our model overestimated the number of no-shows Memorial Day Weekend by approximately 19.5 passengers, more than 33% overestimated This could be particularly detrimental for United's decision-making, as, using this model, United may overbook flights under the expectation that passengers will no-show, and instead have too many passengers show up, causing upset customers and other issues. Our answer in part (b) further demonstrated flaws in our model. Our histograms for predicted no-show probabilities among parties that did and didn't show up weren't considerably different. While we saw slightly hire probabilities of a no-show among parties that did, in fact, no show, there were also considerable low probabilities in line with those seen among parties that did show up. Therefore, our model was not the best predictor of this behavior.
+

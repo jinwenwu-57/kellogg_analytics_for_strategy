@@ -1,0 +1,143 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(stats)
+```
+```{r}
+# Load Data
+df <- read_csv("/Users/jinwens/Desktop/Winter2024/Managerial Analytics/strt-analytics-assignments/GroupAssignment #1/lunchsales-1.csv")
+```
+```{r}
+summary(df)
+```
+
+```{r}
+# Convert DayOfWeek into a categorical variable with Monday as the baseline
+df$DayOfWeek <- relevel(factor(df$DayOfWeek), ref="Monday")
+```
+
+```{r}
+# Model 1: Linear regression with lunch sales as the dependent variable
+model1 <- lm(NumberOfLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius + HumidityPct + HighSeason + NumberOfOpenCompetitors + DayOfWeek, data=df)
+summary(model1)
+```
+```{r}
+# Creating the plot
+ggplot(df, aes(x = NumberOfOpenCompetitors, y = NumberOfLunchSales)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Number of Open Competitors vs Lunch Sales",
+       x = "Number of Open Competitors",
+       y = "Number of Lunch Sales")
+```
+
+1a. 
+The coefficient is -1.80049 and statistically significant, meaning for each additional open competitor, lunch sales decrease by approximately 1.80049, all else equal. This negative relationship makes sense as more competitors are likely to divide the potential customer base in reality. However, the change should not be in absolute numbers because the distribution of competitors is skewed.  More than 75% of the competitor count is below 11 with a mean equals to 10.1, while the largest is 47, which could be an outlier or recording error. If we drop the observation where number of competitor and ran the regression again, we are likely to get a better estimate. 
+
+
+```{r}
+# Model 2: Linear regression with log-transformed lunch sales as the dependent variable
+df$log_NumberOfLunchSales <- log(df$NumberOfLunchSales)
+model2 <- lm(log_NumberOfLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius +
+             HumidityPct + HighSeason + NumberOfOpenCompetitors + DayOfWeek, data=df)
+summary(model2)
+
+```
+1b. 
+The coefficient is -0.0165261 and statistically significant. This coeficient means that for each additional open competitor, lunch sales decrease by approximately 1.64%. This means that sales tend to be lower by 1.64% for each extra competitor, all other factors being constant. Similar issue discussed in 1a could impact our estimation using a logit model. 
+
+Here are the regression without the outlier number of competitor count. 
+```{r}
+# Apply filter
+df_filtered <- df %>% filter(NumberOfOpenCompetitors != 47)
+```
+
+```{r}
+model3 <- lm(NumberOfLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius + HumidityPct + HighSeason + NumberOfOpenCompetitors + DayOfWeek, data=df_filtered)
+summary(model3)
+model4 <- lm(log_NumberOfLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius +
+             HumidityPct + HighSeason + NumberOfOpenCompetitors + DayOfWeek, data=df_filtered)
+summary(model4)
+```
+Based on model 3 and model 4, we found including the outlier caused us to underestaimte the effects of competitors on sales. 
+
+After data cleaning, our answer for 1a and 1 be is the folloiwng: 
+
+Improved 1a: 
+The coefficient is   -4.82419  and statistically significant, meaning for each additional open competitor, lunch sales decrease by approximately 4.82419, all else equal. This negative relationship makes sense as more competitors are likely to divide the potential customer base in reality. 
+
+Improved 1b: 
+The coefficient is -0.0456289 and statistically significant. This coeficient means that for each additional open competitor, lunch sales decrease by approximately  4.56%. This means that sales tend to be lower by 4.56% for each extra competitor, all other factors being constant. 
+
+1c. 
+One potential omitted variable in this context could be the consumer spending power. This variable represents the general economic health of the area where the restaurant is located and the disposable income of potential customers. It's a crucial factor because people's willingness and ability to dine out is significantly influenced by their financial situation. We expect the omitted variable is positive correlated with lunch sales. Generally, better economic conditions or higher consumer spending power means that people are more likely to eat out, increasing lunch sales.
+
+Economic conditions could also be correlated with some of the included variables. For example, the number of open competitors could be influenced by the local economy, with more businesses thriving in a robust economic environment.
+
+If local economic conditions are not included in the model, and they are positively correlated with both the dependent variable (lunch sales) and one or more of the independent variables, the coefficients of these variables might be overestimated. This is because part of the effect of the local economic conditions on lunch sales might be incorrectly attributed to these variables.
+
+2. 
+*Monday has served as a baseline against which sales on other days are compared.
+
+For example, the coefficient for Sunday is 4.63853, which would suggest that on Sundays, all else being equal, lunch sales are expected to be higher by approximately 4.64 units compared to Monday. 
+
+Sunday has the highest average lunch sales, with a coefficient of approximately 4.63853.
+Thursday has the lowest average lunch sales, with a coefficient of approximately   -0.0281115.
+These coefficients suggest that, all else being equal, lunch sales are highest on Sundays and lowest on Thursdays.
+
+Use model 3 to proceed. 
+```{r}
+
+coef_model <- summary(model3)$coefficients
+
+# Extract coefficients and standard errors
+sunday_coef <- coef_model["DayOfWeekSunday", "Estimate"]
+sunday_se <- coef_model["DayOfWeekSunday", "Std. Error"]
+
+thursday_coef <- coef_model["DayOfWeekThursday", "Estimate"]
+thursday_se <- coef_model["DayOfWeekThursday", "Std. Error"]
+
+# Calculate the difference and its standard error
+diff_coef <- sunday_coef - thursday_coef
+diff_se <- sqrt(sunday_se^2 + thursday_se^2)
+
+# Calculate the 95% confidence interval of the difference
+lower_bound <- diff_coef - 1.96 * diff_se
+upper_bound <- diff_coef + 1.96 * diff_se
+
+list(Difference = diff_coef, LowerBound = lower_bound, UpperBound = upper_bound)
+```
+The interval does not contain zero, it suggests that the difference is statistically significant.
+
+```{r}
+# Residual analysis for Model 1
+plot(residuals(model3), main="Residuals of Model 3")
+
+# Residual analysis for Model 2
+plot(residuals(model4), main="Residuals of Model 4")
+```
+Model 3 Residuals
+The residuals for Model 3 appear to be scattered without a clear pattern in terms of increasing or decreasing variance, which is a good sign. However, there's a wide spread of residuals, which suggests there might be some outliers or high-leverage points that could be disproportionately influencing the model's estimates.
+
+Model 4 Residuals
+For Model 4, the residuals seem to be more evenly distributed around zero without apparent patterns or trends, which suggests that the log transformation of the dependent variable might have helped to stabilize the variance of the residuals (homoscedasticity) and improve the model fit.
+
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

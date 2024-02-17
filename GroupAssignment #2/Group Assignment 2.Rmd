@@ -1,0 +1,142 @@
+---
+title: "Group Assignment 2"
+author: "Wahib Charamand, Valentin de la Pena, Jinwen Wu, Abe Rubin"
+subtitle: "Analytics for Strategy"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r, message=FALSE, warning=FALSE}
+# Packages
+library(dplyr)
+library(lmtest)
+library(sandwich)
+
+# Load Dataset
+united <- read.csv("/Users/jinwens/Downloads/united-1.csv")
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Data Cleaning
+united <- united %>%
+  mutate(
+    bookingcountry_us = ifelse(bookingcountry == "US", 1, 0)
+  )
+```
+
+```{r}
+# Create Data Subset for Before Memorial Day Weekend
+united_pre_memorial_day <- united_memorial_day <- united[!(united$departuredate %in% c("26-May-07", "27-May-07", "28-May-07")),]
+
+# Create Logit Model
+noshows_logit <- glm(noshow ~
+                      numberinparty +
+                      daystodep + 
+                      bookingcountry_us +
+                      eticketed + 
+                      as.factor(assignedseat) +
+                      upline + 
+                      downline,
+                      data = united_pre_memorial_day,
+                      family=binomial(link = "logit") )
+coeftest(noshows_logit, vcovCL, type='HC1')
+
+# Calculate Baseline Odds
+
+  # Choose Coefficient from Logit
+noshows_logit_coef <- coef(noshows_logit)
+
+  # Calculate Odds from Coefficient
+baselineodds <- exp(noshows_logit_coef[1])
+
+  # Print Baseline Odds
+cat("Baseline Odds:", baselineodds, "\n")
+
+  # Calculate Probability from Odds
+baselineprobability <- (baselineodds)/(1+baselineodds)
+
+  # Print Baseline Probability
+cat("Baseline Probability:", baselineprobability, "\n")
+
+# Calculate Odds of No-Show for "Typical" Business Traveler (Described Below)
+  
+  # Create Data for Hypothetical "Typical" Business Traveler
+typical_business_traveler <- list(
+  numberinparty = 1,
+  daystodep = 7,
+  bookingcountry_us = 1,
+  eticketed = 1,
+  assignedseat = "Y",
+  upline = 0,
+  downline = 0
+)
+
+  # Predict Result for Business Traveler
+predicted_business_traveler <- predict(noshows_logit, 
+                                           newdata = typical_business_traveler, 
+                                           type = "response")
+
+  # Print Probability for Business Traveler
+cat("Baseline Probability for Business Traveler:", 
+    predicted_business_traveler, "\n")
+
+  # Create Data for Hypothetical "Typical" Business Traveler with Upline Connection
+typical_business_traveler_with_upline <- list(
+  numberinparty = 1,
+  daystodep = 7,
+  bookingcountry_us = 1,
+  eticketed = 1,
+  assignedseat = "Y",
+  upline = 1,
+  downline = 0
+)
+
+  # Predict Result for Business Traveler with Upline
+predicted_business_traveler_with_upline <- predict(noshows_logit, 
+                                           newdata = typical_business_traveler_with_upline, 
+                                           type = "response")
+
+  # Print Probability for Business Traveler
+cat("Probability for Business Traveler with Upline:", 
+    predicted_business_traveler_with_upline, "\n")
+```
+
+Question 1.
+
+(a) The intercept in the above regression was -1.17790157. This implies an odds of 0.3079242 and probability of 0.2354297 of a no-show for a person when the predictor variables are at either 0 or their reference levels. Specifically, this is a person with 0 people in their party who booked or modified with 0 days to departure, made their booking not in the US as a non-eticket, without an assigned seat, and with no connections. Of course, this person does not make logical sense, as it is impossible to have 0 people in a party.
+
+Question 2.
+
+(a) The effect of adding an upline connection is statistically significant, however, the effect of adding a downline connection is not statistically significant.
+
+(b) The regression coefficient on the upline connection was 0.90617180. This implies that having an upline connection multiplies an individual's odds of no-showing by 0.90617180. This means that the odds of no-showing decrease.
+
+(c) We do not know the implied effect of an upline connection on the party's probability of a no-show without having a baseline probability. For a baseline probability, consider an individual who is traveling alone, books their flight 7 days before departure from within the U.S. as an e-ticket with an assigned seat and no connections. This baseline represents what might be a typical business traveler, so, they make sense to use as a baseline for understanding the impact of a connection. The probability of a no-show for this traveler is 0.05297631. However, when this traveler has an upline connection, the probability of a no-show becomes 0.1216062. So, adding an upline connection for what one may consider the "typical" business traveler increases the probability of a no show by approximately 7%.
+
+```{r}
+# Create Data Subset for Memorial Day Weekend
+united_memorial_day <- united[(united$departuredate %in% c("26-May-07", "27-May-07", "28-May-07")),]
+
+# Calculate No Shows Probability
+probability_noshows_memorial_day <- predict(noshows_logit, united_memorial_day, type = "response")
+united_memorial_day$predicted_noshows_prob <- probability_noshows_memorial_day
+
+# Calculate Predicted No Shows for Party
+united_memorial_day$predicted_noshows_memorial_day <- united_memorial_day$numberinparty*united_memorial_day$predicted_noshows_prob
+
+# Calculate Actual No Shows for a Party (Total)
+united_memorial_day$actual_noshows <- united_memorial_day$numberinparty*united_memorial_day$noshow
+
+# Examine Predicted No-Shows vs. Realized
+cat("Actual No-Shows", 
+    sum(united_memorial_day$actual_noshows), "\n")
+cat("Predicted No-Shows", 
+    sum(united_memorial_day$predicted_noshows_memorial_day), "\n")
+
+```
+
+Question 3:
+
+(a) Our predicted number of no-shows was 64.58884, compared to 45 actual no-shows over Memorial Day Weekend. Therefore, we slightly overestimated the number of no-shows. This would not be good for United, as, overestimating the number of no-shows could result in more passengers showing up than are seats available on flights.
+
+(b) 

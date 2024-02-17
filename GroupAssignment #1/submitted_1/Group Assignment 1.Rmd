@@ -1,0 +1,155 @@
+---
+title: "Group Assignment 1"
+author: "Wahib Charamand, Valentin de la Pena, Jinwen Wu, Abe Rubin"
+subtitle: "Analytics for Strategy"
+output: html_document
+---
+
+```{r, message=FALSE, warning=FALSE}
+# Packages
+library(multcomp)
+library(sandwich)
+library(ggplot2)
+library(lmtest)
+library(dplyr)
+
+# Load Dataset
+lunchsales <- read.csv("lunchsales-1.csv")
+```
+
+```{r}
+### Regression Model - Lunch Sales
+
+  # Build Regression Model
+lunchsalesmodel <- lm(NumberOfLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius + HumidityPct + HighSeason + NumberOfOpenCompetitors + as.factor(DayOfWeek), data = lunchsales)
+  
+  # Summarize Regression Model
+summary(lunchsalesmodel)
+
+  # Use Heteroskedasticity-Robust Standard Errors
+coeftest(lunchsalesmodel, vcovCL, type='HC1')
+```
+
+```{r}
+### Regression Model - Log Lunch Sales
+
+  # Check if Lunch Sales Are Ever 0
+any(lunchsales$NumberOfLunches == 0)
+  # (Above Returned False)
+
+  # Create New Variable for Log Lunch Sales
+lunchsales$LogLunchSales <- log(lunchsales$NumberOfLunchSales)
+
+  # Build Regression Model
+loglunchsalesmodel <- lm(LogLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius + HumidityPct + HighSeason + NumberOfOpenCompetitors + as.factor(DayOfWeek), data = lunchsales)
+
+  # Summarize Regression Model
+summary(loglunchsalesmodel)
+
+  # Use Heteroskedasticity-Robust Standard Errors
+coeftest(loglunchsalesmodel, vcovCL, type='HC1')
+```
+
+Question 1:
+
+(a) All else equal, a one store increase in the number of open competitors decreases lunch sales for the mom-and-pop restaurant by 1.80049 lunch orders. The sign on this coefficient does make sense, as one would expect the addition of a competitor on a given day to draw in customers, taking away customers from the mom-and-pop restaurant and, in turn, decreasing lunch sales.
+
+(b) All else equal, a one unit increase in the number of open competitors decreases lunch sales for the mom-and-pop restaurant by 1.65261%, all else being equal. 
+
+(c) One clear omitted variable could be current economic conditions in the area surrounding the mom-and-pop store. Local economic conditions would likely be positively correlated with lunch sales, as diners would have more money to spend on not-necessities, such as going out for lunch as opposed to making it at home. Current economic conditions may also affect how many competitors are open on a given day, as more businesses may open in better economic conditions. Because local economic conditions are not included in our model, the coefficient on number of open competitors may be positively biased. The model may underestimate the effect of an additional open competitor because positive economic conditions drive both number of open competitors and sales higher. 
+
+Note: From here onward, we use the first model, lunch sales.
+
+```{r}
+### Test for Significance of Days of the Week
+
+  # Note: Full Regression Was Created Above, Named "lunchsalesmodel"
+
+  # Build Regression Model Without Day of the Week
+lunchsalesmodel_t <- lm(NumberOfLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius + HumidityPct + HighSeason + NumberOfOpenCompetitors, data = lunchsales)
+
+  # Run Partial F-Test
+anova(lunchsalesmodel, lunchsalesmodel_t)
+
+  # Change Baseline Category for Day of Week to Thursday
+lunchsales$DayOfWeek <- relevel(factor(lunchsales$DayOfWeek), ref="Thursday")
+
+  # Recreate Lunch Sales Model
+lunchsalesmodel <- lm(NumberOfLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius + HumidityPct + HighSeason + NumberOfOpenCompetitors + as.factor(DayOfWeek), data = lunchsales)
+
+  # Summarize Updated Lunch Sales Model
+summary(lunchsalesmodel)
+```
+
+Question 2:
+
+Our initial regression model, lunchsalesmodel, reveals that Sunday has the highest average lunch sales, all else equal, and Thursday has the lowest lunch sales, all else equal. This relationship is statistically significant, demonstrated by the partial f test and pairwise comparison performed above.
+
+```{r, message=FALSE, warning=FALSE}
+### Residual Analysis
+
+  # Gather Residuals
+resid = lunchsalesmodel$residuals
+
+  # Gather Predicted Values
+predicted = fitted(lunchsalesmodel)
+
+  # Graph Residuals and Predicted Values
+residual_analysis <- data.frame(resid, predicted)
+ggplot(residual_analysis, aes(x=predicted, y=resid)) + 
+  geom_point()+
+  geom_smooth(method=lm, se=FALSE)+
+  xlab("Predicted")+
+  ylab("Residual")+
+  theme_bw()
+```
+
+Question 3:
+
+(a) The plot reveals the existence of at least one relevant outlier where the model predicted very far off from the actual number of lunch sales on that day. Presumably, this day was one that does not have many of the characteristics of a high sales day, however, still sold a large number of lunches. Perhaps it was a holiday or otherwise special day that drove business high and, resultantly, was an outlier in the data.
+
+(b) To fix the issue above, we could simply eliminate the outlier from the dataset based on relevant characteristics. The result would likely increase the estimated effects of competition on sales, as the outlier represents a day with high sales and (likely) extensive competition, so, removing it would remove a point taking away from the negative relationship between competition and sales. 
+
+```{r}
+### Test Hypothesis on Outlier
+
+  # Create Scatterplot of Number of Lunch Sales and Number of Open Competitors
+ggplot(lunchsales, aes(x = NumberOfOpenCompetitors, y = NumberOfLunchSales)) +
+  geom_point() +
+  theme_bw() +
+  labs(title = "Number of Open Competitors vs Lunch Sales",
+       x = "Number of Open Competitors",
+       y = "Number of Lunch Sales")
+```
+
+Indeed, examining a scatterplot of lunch sales and open competitors reveals an outlier in which the store sold an average number of lunches with many competitors open. This looks like it may be an error in the data, as on no other days were there nearly as many competitors open.
+
+```{r}
+### Examine Results Without Outlier
+
+  # Filter Data to Remove Outlier
+lunchsales_no_outlier <- lunchsales %>%
+  filter(NumberOfOpenCompetitors != 47)
+  
+  # (The Following Code is Copied from Previously to Test the Models Without the Outlier)  
+
+  # Build Regression Model
+lunchsalesmodel <- lm(NumberOfLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius + HumidityPct + HighSeason + NumberOfOpenCompetitors + as.factor(DayOfWeek), data = lunchsales_no_outlier)
+  
+  # Summarize Regression Model
+summary(lunchsalesmodel)
+
+  # Use Heteroskedasticity-Robust Standard Errors
+coeftest(lunchsalesmodel, vcovCL, type='HC1')
+
+  # Build Regression Model
+loglunchsalesmodel <- lm(LogLunchSales ~ PrecipitationMm + LunchtimeTemperatureCelsius + HumidityPct + HighSeason + NumberOfOpenCompetitors + as.factor(DayOfWeek), data = lunchsales_no_outlier)
+
+  # Summarize Regression Model
+summary(loglunchsalesmodel)
+
+  # Use Heteroskedasticity-Robust Standard Errors
+coeftest(loglunchsalesmodel, vcovCL, type='HC1')
+```
+
+Repeating the initial model without the outlier yields a statistically significant coefficient of -4.82419 for the of number of open competitors on lunch sales and a statistically significant coefficient of -0.0456289 for the log effect of number of open competitors on lunch sales. These are both stronger than the coefficients we found when running the regression with the outlier included, in line with our expectations.

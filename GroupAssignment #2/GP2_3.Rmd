@@ -1,0 +1,172 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r, message = FALSE}
+# use dplyr for piping - readability
+library(dplyr)
+library(haven)
+library(broom)
+library(lfe)
+library(sandwich)
+library(lmtest)
+```
+
+
+
+```{r}
+data <- read.csv("/Users/jinwens/Downloads/united-1.csv")
+```
+
+```{r}
+summary(data)
+```
+
+```{r}
+# Segment the data to focus on no-shows using data on May 25 and before
+data$departuredate <- as.Date(data$departuredate, format="%d-%b-%y")
+
+# Filter records on or before May 25, 2007
+filtered_data <- subset(data, departuredate <= as.Date("2007-05-25"))
+
+# Display the filtered data
+summary(filtered_data)
+```
+
+```{r}
+# Convert to dummy variables
+filtered_data$assignedseat <- as.integer(filtered_data$assignedseat == "Y")
+filtered_data$bookingcountry <- as.integer(filtered_data$bookingcountry == "US")
+
+data$assignedseat <- as.integer(data$assignedseat == "Y")
+data$bookingcountry <- as.integer(data$bookingcountry == "US")
+```
+
+Baseline model must in some way account for the 
+1) size of the party: numberinparty
+2) the number of days between the booking (or latest modification) and the scheduled departure: daystodep
+4) whether the booking was made in the US: bookingcountry
+5) whether it was an e-ticket: eticketed
+5) whether a seat had been assigned: assignedseat
+6) what type(s) of connections the booking has : upline, downline
+```{r}
+model <- glm(noshow ~ numberinparty +  daystodep + eticketed + assignedseat + bookingcountry + downline + upline,  
+             data = filtered_data, family = binomial(link = "logit"))
+summary(model)
+```
+
+```{r}
+coeftest(model, vcovCL, type='HC1')  
+```
+Question 1: 
+The intercept represents the log odds of the dependent variable being 1 (a no-show) when all the independent variables in the model are held at zero. Given the intercept value of -1.17790157, the Odds is e^(intercept) = e^(-1.17790157) is approximately 0.3080 
+
+By the formula [Probability = Odds/(1+Odds)], the probability is approximately 23.54% Under the hypothetical baseline conditions set by the model (non-electronic ticket, no assigned seat, booking not made in the US, no downline or upline flights, a single person in the party, and booking made on the day of departure), the implied probability of a passenger being a no-show is about 23.54%. 
+
+Question 2: 
+a. The effect of adding an upline connection on no-show rates is statistically significant, with a p-value 6.370e-15 and a positive coefficient of about 0.90617180. This indicates that there is a significant association between having an upline connection and the likelihood of being a no-show.
+
+However, the effect of adding a downline connection is not statistically significant, with a p-value of 0.3024  and a negative coefficient of -0.17585087. This means that, based on the available data, we cannot confidently assert that having a downline connection significantly affects the likelihood of being a no-show.
+
+b. The coefficient for an upline connection is 0.90617180, which means that for each additional upline connection, the odds of being a no-show are multiplied by 
+e^ (0.90617180) = 2.47483023067. This factor represents the change in odds due to an upline connection.
+
+c. For a baseline probability, consider an individual who is traveling alone, books a flight 7 days before departure from within the U.S., and chooses an e-ticket with an assigned seat and no connections. This archetype is prevalent within the business and finance industry, representing a considerable segment of air travel demand. By adopting this model as our baseline, we afford ourselves a robust platform from which to explore and quantify the impacts of varying travel parameters, such as the addition of connections. 
+
+
+```{r}
+typical_business_traveler <- list(
+  numberinparty = 1,
+  daystodep = 7,
+  bookingcountry = 1,
+  eticketed = 1,
+  assignedseat = 1,
+  upline = 0,
+  downline = 0
+)
+
+predicted_business_traveler <- predict(model, 
+                                           newdata = typical_business_traveler, 
+                                           type = "response")
+
+typical_business_traveler_with_upline <- list(
+  numberinparty = 1,
+  daystodep = 7,
+  bookingcountry = 1,
+  eticketed = 1,
+  assignedseat = 1,
+  upline = 1,
+  downline = 0
+)
+
+predicted_business_traveler_with_upline <- predict(model, 
+                                           newdata = typical_business_traveler_with_upline, 
+                                           type = "response")
+
+print(predicted_business_traveler)
+print(predicted_business_traveler_with_upline)
+```
+Based on our model output, for a typical business traveler without an upline connection, the predicted probability of being a no-show is approximately 5.30%. In contrast, for a similar traveler but with an upline connection, the predicted probability increases to approximately 12.16%.
+
+This comparison demonstrates that, according to the model, the presence of an upline connection nearly doubles the probability of a business traveler being a no-show. This significant increase suggests that logistical factors associated with connections, particularly upline connections, have a substantial impact on the likelihood of no-shows among business travelers.
+
+Question 3: 
+Code for 3(a)
+```{r}
+memorial_weekend_data <- subset(data, departuredate >= as.Date("2007-05-26") & departuredate <= as.Date("2007-05-28"))
+
+# Calculate No Shows Probability
+probability_noshows_memorial_day <- predict(model, memorial_weekend_data, type = "response")
+memorial_weekend_data$predicted_noshows_prob <- probability_noshows_memorial_day
+
+# Calculate Predicted No Shows for Party
+memorial_weekend_data$predicted_noshows_memorial_day <- memorial_weekend_data$numberinparty*memorial_weekend_data$predicted_noshows_prob
+
+# Calculate Actual No Shows for a Party (Total)
+memorial_weekend_data$actual_noshows <- memorial_weekend_data$numberinparty*memorial_weekend_data$noshow
+
+# Examine Predicted No-Shows vs. Realized
+cat("Actual No-Shows", 
+    sum(memorial_weekend_data$actual_noshows), "\n")
+cat("Predicted No-Shows", 
+    sum(memorial_weekend_data$predicted_noshows_memorial_day), "\n")
+
+```
+
+Based on our model, we expect 64.5884 absences during the memorial_weekend. There are actually 45 actual absences as recorded in the data. 
+
+Code for 3(b) 
+```{r}
+# Histogram for parties that did show up
+hist(memorial_weekend_data$predicted_noshows_prob[memorial_weekend_data$noshow == 0], 
+     breaks = 30, col = 'blue', 
+     main = 'Predicted No-Show Probabilities for Parties That Showed Up', 
+     xlab = 'Predicted No-Show Probability', xlim = c(0, 1))
+
+# Histogram for parties that did not show up
+hist(memorial_weekend_data$predicted_noshows_prob[memorial_weekend_data$noshow == 1], 
+     breaks = 30, col = 'red', 
+     main = 'Predicted No-Show Probabilities for Parties That Did Not Show Up', 
+     xlab = 'Predicted No-Show Probability', xlim = c(0, 1))
+
+```
+Code for 3(c)
+
+```{r}
+memorial_weekend_data$predicted_no_show <- ifelse(memorial_weekend_data$predicted_noshows_prob > 0.5, 1, 0)
+
+# Calculate accuracy
+accuracy <- sum(memorial_weekend_data$predicted_no_show == memorial_weekend_data$noshow, na.rm = TRUE) / sum(!is.na(memorial_weekend_data$noshow))
+print(paste("Accuracy: ", accuracy))
+```
+
+
+We stored out model output with the variable predicted_no_show_prob. Then, we created a dummy named predicted_no_show. A value of 1 to memorial_weekend_data$predicted_no_show if the predicted probability of a no-show (memorial_weekend_data$predicted_no_show_prob) is greater than 0.5. This implies that the booking is predicted to be a no-show.
+A value of 0 to memorial_weekend_data$predicted_no_show if the predicted probability is 0.5 or less. This implies that the booking is predicted to show up. 
+
+To evaluate the quality of our predictions, we compared the expected no-shows to the actual no-shows. We define accuracy as the proportion of total predictions that were correct (both true positives and true negatives) relative to all predictions made. It provides a simple measure of how well the model's predictions match the actual outcomes, without distinguishing between the types of errors (false positives vs. false negatives). The output suggests that our model accuracy is over 90%. 
