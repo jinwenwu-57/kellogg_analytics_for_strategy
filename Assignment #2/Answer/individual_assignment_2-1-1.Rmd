@@ -1,0 +1,70 @@
+---
+title: "Individual assignment 2, Suggested answers"
+author: "Shengmaof Cao"
+output:
+  html_document: default
+---
+
+```{r}
+#install.packages("modelsummary")
+library(modelsummary) 
+```
+
+Q1
+
+The key is to recognize default is a binary outcome variable.
+We can use the binary outcome sample size calculation formula from class.
+
+```{r}
+#type1 = 0.05
+a = 1.96
+#type2 = 0.8
+b = 0.84
+p1 = 0.27
+p2 = 0.09
+
+pbar = (p1 + p2) / 2
+numerator = 2 * ((a + b)**2)*pbar*(1-pbar)
+denominator = (p1 - p2)**2
+N = numerator / denominator
+print(N)
+
+```
+
+We need a sample size of 72 on each arm of the randomized trial 
+to achieve the desired certainty on this measurement, totaling 144 observations.
+The sample of 845 borrowers is large enough for our purposes.
+
+------------------------------------------------------------------------
+
+Q2)
+
+We need information on intra-cluster corrleation and inter-cluster correlation to 
+determine whether we have enough sample size. In the extreme case where everyone 
+within a cluster is the same and all of the clusers are different, we would have 
+effectively 169 observations which is above the 144 required for the RCT. 
+
+------------------------------------------------------------------------
+
+3)
+
+```{r}
+microfinance <- read.csv('./microfinance.csv')
+str(microfinance)
+```
+
+```{r}
+microfinance_pre <- subset(microfinance, select= 
+    c(GracePeriod, loanamount, Age, Married, Years_Education, 
+      HH_Size, Shock_Any, Has_Business, Homeowner))
+
+#microfinance_pre$clusters <- microfinance$group_id
+datasummary_balance(~GracePeriod, data = microfinance_pre, 
+                    dinm_statistic= "p.value", fmt=3)
+```
+
+
+We observe that the randomization is in large part successful. "Married" is the 
+only variable with an individual p-value below 0.05, but it is still higher than 
+a BH-corrected threshold of 0.00625. We are comfortable with going ahead with 
+the experiment. 

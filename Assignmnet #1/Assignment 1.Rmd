@@ -1,0 +1,71 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+Load data 
+```{r}
+data <-read.csv("/Users/jinwens/Desktop/Winter2024/Managerial Analytics/strt-analytics-assignments/Assignmnet #1/econgrades-1.csv")
+```
+
+```{r}
+summary(data)
+```
+
+Create dummy variables for gender and for students who completed 2 or more years of advanced math
+```{r}
+library(dplyr)
+# ==1 if male, 0 otherwise. 
+data$male <- as.integer(data$gender=="Male")
+data$more_than_two <- as.integer(data$am2 ==1| data$am3 ==1)
+data$
+```
+
+Form Model
+```{r}
+model <- lm(grade ~ ge100 + ge101 + size + fgpa + msat + vsat + more_than_two + male, data = data)
+summary(model)
+```
+
+According to the regression results, Here are my answers to each question. 
+
+```{r}
+# Question 1 
+# a. What is the implied effect of scoring one additional point on the math SAT on Econ 231 grade? ; b. Is this relationship statistically significant at the 5% confidence level?; c. What is the implied effect of scoring 10 additional points on the math SAT on Econ 231 grade? Briefly discuss the economic significance of the effect.
+```
+a. The implied effect of math SAT grade on the Econ 231 grade is an increase of approximately 0.0014 points.
+b. The regression result suggest that the relationship is  statistically significant at the 5% confidence level for math SAT grade with P value = 0.0113.
+c. Scoring 10 additional points on the math SAT would imply an increase of approximately 0.0145 points on the Econ 231 grade. The economic significance of this effect is small, as a 10-point increase in SAT scores is quite substantial and only yields a very modest increase in the predicted grade.
+
+```{r}
+# Question 2
+# The university shared a new dataset on a group of rising second-year students who have enrolled in econ 231 for the upcoming quarter. Briefly explain how you will use your results to identify students at risk for poor academic performance in this class.
+```
+The model can be applied to the new dataset of rising second-year students by calculating their predicted grades using the regression coefficients. (With known characteristics and the table of coefficients respectively, I can predict their grades.) In particular, I will look into the variables that have statistically significant impact on grades: ge100, ge101, fgpa, msat, female. Since vsat and size are neither statistically significant nor featured by large coefficient(in absolute value), I wil drop the variable. Since more_than_two_years has a relatively large coefficient, I would like to look into its distribution and marginal error with idealy larger sample to decide wether to keep it. Those with predicted grades below a certain threshold could be considered at risk and could be targeted for tutoring services. For the next semester, I can reuse the data to test if the prediction is good enough. We can improve the model and make better predictions. 
+
+```{r}
+# Question 3
+#The economics department is concerned that female students only enroll in econ 231 if they are highly confident that they will perform well and that this is driving a gender gap in students choosing to major in economics. One potential sign of this would be if the female students who enroll in econ 231 perform systematically better than the male students.
+```
+
+a. After controlling for other explanatory variables in the regression, male students’ average grade is lower than female students’ by approximately 0.127 points, and this difference is statistically significant at the 5% level with a p-value of approximately 0.0487.
+
+b. The coefficient of the dummy variable for "Male" (= -0.127) tells us how much higher or lower the grade in Econ 231 is for males compared to females, holding all other variables constant. Since this coefficient was negative, it indicated that being male was associated with a grade in Econ 231 that was 0.127 points lower than females, on average. If we reversed the baseline category for the gender variable by making Female the baseline, the regression intercept term would increase by approximately 0.127 points, which is the magnitude of the current coefficient for male students.
+
+```{r}
+# Question 4
+```
+While a p-value of 0.03 suggests that the relationship between verbal SAT scores and grades is statistically significant, this does not necessarily imply causation or that the effect is meaningful across all student groups. Still, the conclusion may not be valid if there are omitted variable biases (i.e. if the relationship does not hold when controlling for other factors such as family background. ).
+
+Since analysts further segmented the sample group with my original model, we may arrive at a misleading result because the sample size of each group after segmentation may be too small to be representative. 
+
+To improve the analysis, it would be important to control for potential confounding variables while also ensuring that the model does not suffer from issues like multicollinearity. It would also be helpful to check the robustness of the result across different segments of the data and to use additional data to validate the findings.

@@ -1,0 +1,97 @@
+---
+title: "Individual Homework #2"
+output: html_notebook
+---
+#Q1:
+The baseline eight-week default rate is around 9%. Your client wants to be able to detect if the default rate increases to 27% with the grace period. The desired Type I error rate is 0.05 (i.e., a = 1.96), and the desired power is 0.8 (i.e., b = 0.84). If you randomly assign each borrower to the treatment group (i.e., grace period) or the control group (i.e., no grace period), is the sample big enough for your analysis? Please show your work.
+
+Answer: 
+The ideal sample size caculation can be determined by following: 
+N = {[2[(a+b)^2]p-bar(1-p-bar)}/(p1-p2)^2
+p-bar = (p1+p2)/2
+
+Knowing from the question set-up, p1 = 0.09 (the baseline) and p2 = 0.27 (outcome int the treatment group)
+significance level = 95%, a = 1.96 (critical number for alpha = 0.05)
+power b = 0.84 (the correct Z-value for a power of 0.8)
+
+First, calculate p-bar = (0.09+0.27)/2 = 0.18 
+Then, Numerator = 2*（1.96+0.84)^2 * 0.18 *(1-0.18) = 2*（1.96+0.84)^2 * 0.18 * 0.82 = 2.314368
+Denominator = (0.09-0.27)^2 = 0.0324
+In conclusion,  
+N = 2.314368/0.0324 = 71.4311111111
+
+Alternatively, we can use an alternative R package 
+```{r}
+install.packages("pwr")
+library(pwr)
+
+p1 <- 0.09  # Baseline default rate -probability of the outcome in the treatment group
+p2 <- 0.27  # Expected default rate with grace period -  probability of the outcome in the control group
+sig_level <- 0.05  # Type I error rate 
+power <- 0.8  # Desired power
+
+# Calculate the sample size needed
+sample_size <- pwr.2p.test(h = ES.h(p1, p2), sig.level = sig_level, power = power)
+
+print(sample_size)
+```
+Using the R package qwr, I calculate sample sizes to be slightly lower than 72 (the sample size figured by using the formula given in class).  If we use the stricter size requirement, only a total of 144 participants is needed (2N).  Regardless, the size of the sample is much greater than either of the cutoffs. Therefore, the sample is big enough for my analysis. 
+
+
+#Q2: 
+You learned that the borrowers are in groups of 5 that regularly interact with each other. As a result, you have decided to do clustered random assignment by groups. Is your sample still big enough for the clustered RCT? Please explain your reasoning clearly.
+
+Answer: 
+Given that there are 845 borrowers, participants are grouped in clusters of 5. This arrangement results in 169 clusters. In the worst-case scenario, all of the people within the same group are identical, lowering the effective sample size to 169. According to the analysis for the last question, 169 still exceed the required effective sample size.  
+
+#Q3: 
+You went ahead with the clustered RCT, with 84 groups assigned to the treatment group and 85 assigned to the control group. Perform a covariate balance check on the loan amount and the borrowers’ characteristics. Do you consider your randomization
+successful? Briefly explain your reasoning.
+```{r}
+df <-read.csv("microfinance-1.csv")
+summary(df)
+```
+
+```{r}
+# Covariate balance
+library(modelsummary)
+library(haven)
+# use lmtest and sandwich for clustering an heteroskedasticity-corrected standard errors
+library(dplyr)           
+```
+```{r}
+#select the treatment dummy and covariates 
+loan_pre <-subset(df, select = -c(group_id))
+datasummary_balance(~GracePeriod, data = loan_pre, 
+                    dinm_statistic="p.value", fmt = 3)
+
+```
+Analysis: 
+I don't think the randomization is successful. 
+
+The table above compares the means and standard deviations of various borrower characteristics between two groups: those who did not receive the grace period (0) and those who did (1). The last two columns show the difference in means between the two groups and the standard error of this difference. When interpreting the balance of covariates, we look for statistically insignificant differences in means between the treatment and control groups. This would suggest that the randomization process likely worked as intended.
+
+For Married, Years_Education, HH_Size, Shock_Any, Has_Business, and Homeowner, the differences in means are quite small. The Age of borrowers is slightly lower on average in the treatment group (33.8) compared to the control group (34.508), but the difference is small (-0.708) and may not be statistically significant (p-value > 0.05). 
+
+The loanamount has a slightly higher mean in the treatment group (7,633.33) compared to the control group (7,395.29), with a difference of 238.039.
+
+In addition to economic comparison. Here is a further analysis of the table through the lens of statistics. Based on the p-values, here are the variables that would be considered concerning:
+loanamount: With a p-value of 0.05, the difference in means of the loan amount between the two groups is statistically significant. This indicates that the treatment group has a higher average loan amount than the control group, which could be a potential concern for the randomization process.
+Married: The p-value here is 0.033, which is also below the 0.1 threshold. This suggests that there is a statistically significant difference in the proportion of married individuals between the treatment and control groups. 
+
+All other variables have p-values above 0.05, which means they are not statistically significantly different between the treatment and control groups at the 5% significance level, and thus, they would not be considered concerning for the balance check at this threshold.
+
+Any analysis on the impact of the treatment should control for these imbalanced variables to ensure that any observed effect is not due to differences in loan amount. Since the relationship we are mianly interested in studying is the loan amount and the borrowers’ characteristics, the randomization fails to control for the main connection. 
+
+Revision: 
+Feedback:" You just need to cluster your standard error around group_id. Once you do that, you will notice that the difference in loanamount is also statistically insignificant."
+```{r}
+microfinance_pre <- subset(df, select= 
+    c(GracePeriod, loanamount, Age, Married, Years_Education, 
+      HH_Size, Shock_Any, Has_Business, Homeowner))
+
+microfinance_pre$clusters <- df$group_id
+datasummary_balance(~GracePeriod, data = microfinance_pre, 
+                    dinm_statistic= "p.value", fmt=3)
+```
+

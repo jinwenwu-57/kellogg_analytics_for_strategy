@@ -1,0 +1,62 @@
+---
+title: "Assignment #1, Suggested Answers"
+author: Shengmao Cao
+output: html_notebook
+---
+
+```{r, message = FALSE}
+## Install Packages: uncomment the code as needed 
+#install.packages("dplyr") 
+#install.packages("Hmisc") 
+#install.packages("haven") 
+#install.packages("margins")  
+#install.packages("boot")  
+#install.packages("sandwich") 
+#install.packages("lmtest") 
+#install.packages("lfe")   
+#install.packages("broom") 
+#install.packages("multcomp") 
+#install.packages("data.table") 
+#install.packages("car") 
+#install.packages("estimatr")
+```
+
+```{r}
+## Assignment
+
+## Read in Data
+grade_data <- read.csv("C:/Users/scz7085/Dropbox/Teaching/STRT469/Assignments/Assignment1_basics/econgrades.csv")
+
+
+## Add Required Dummy Variables
+grade_data$gender_binary <- as.integer(grade_data$gender == "Male") ##Male = 1, Female = 0
+grade_data$am <- grade_data$am2 + grade_data$am3 ## Summing binary variables am2 and am3 so that am is a binary variable that == 1 if a student took 2 or 3 years of advanced math and 0 otherwise.
+
+## Regression
+model <- lm(grade ~ ge100 + ge101 + size + fgpa + msat + vsat + am + gender_binary, data=grade_data)
+summary(model)
+```
+
+Assignment Answers:
+
+1a. 1.447e-03 - based on the above regression output, one additional point on the math SAT is predicted to increase Econ 231 grade by 1.447e-03 (0.001447), holding all else equal.
+
+1b. Yes - the p-value of this estimate is 0.011, which means this relationship is statistically significant at the 5% confidence level.
+
+1c. 1.447e-02 - scoring an additional 10 points on the math SAT is predicted to increase Econ 231 grade by 1.447e-02 (0.01447). Because the variable "grade" is in GPA scale, this difference can be interpreted as increasing by \~5% of a letter grade (assuming 0.3 GPA increase for each letter grade, include +'s and -'s). Therefore, we can determine that scoring 10 additional points on the math SAT is unlikely to have a significant impact on the grade achieved in Econ 231.
+
+The standard deviation of math SAT score is around 60. That translates to ~0.1 change in GPA, which is still relatively small. 
+
+2.  In order to identify the students who may be at risk of poor academic performance in the upcoming Econ 231 class, I would use the model developed in part 1 to predict each student's performance. Assuming that the new data set contains a data point for each explanatory variable for each student, we can "input" the data for each student into our model to predict the score that each student would receive in Econ 231. Once we do this, we can identify those students who are at risk for poor academic performance (i.e. those students predicted to achieve a grade below a chosen threshold).
+
+Another common answer is to identify students who perform poorly in areas that we have found to heavily impact the grade. This is a sensible approach but may not always work (e.g. what if a student did very well in Econ 100 but very poorly in Econ 101?)
+
+3a. Females score 1.273e-01 higher than males. To understand the estimated impact gender has on Econ 231 grades, we look to the coefficient for the gender_binary variable, which is -1.273e-01. Because the binary variable was coded to equal 1 for males and 0 for females, that means that females receive a higher grade than their male counterparts, after controlling for all other variables. This result is statistically significant at the 5% confidence level, as the p-value of 0.048668 is less than 5%.
+
+3b. By reversing the coding mentioned in 3a., the intercept would decrease by 1.273e-01, or the current value of the gender_binary coefficient. Because females were the baseline (female = 0) in the regression, by changing the baseline to be males, the intercept would decrease by the value of the gender_binary coefficient. Note that the coefficient will now be a positive 1.273e-01, as females score higher than the baseline male grade.
+
+4.  Unfortunately, the conclusion that Econ 231 performance increases as verbal SAT score increases is not valid despite the small p-value of 0.03. This is because the analyst performed multiple comparisons (i.e. tested multiple hypotheses from the same data set) once they segmented the students into distinct groups. By doing, this they increased the likelihood that we would experience at least one false positive, which could be the statistically significant p-value reported for verbal SAT scores. In order to draw a conclusion on any relationship we will need to correct for multiple comparisons, with one option being the Benjamini-Hochberg correction.
+
+Discussions on other issues (e.g., small sample, omitted variable bias) will earn partial credits.
+
+Other solutions for the multiple comparison problem include pre-specification, or pooling eight groups in one regression with group dummies added as regressors. 
